@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Chartview
+{% endblock %}
+
+{% block main %}
+
+    <div class="container d-flex align-items-center justify-content-center">
+        <form id="yearForm">
+            <div class="container d-flex align-items-center justify-content-center">
+                <select name="year" id="expensesYear" class="form-select w-auto mx-2">
+                    <option value="Select a year" selected disabled>Select a year</option>
+                    {% for year in years %}
+                        <option value="{{year}}">{{year}}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-primary m-2">Submit</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="p-5 m-5">
+        <canvas id="myChart" width="200" height="400"></canvas>
+    </div>
+    
+    <script src="static/chart.js"></script>
+
+
+{% endblock %}
+
