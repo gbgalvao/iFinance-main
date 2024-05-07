@@ -68,7 +68,7 @@ def index(current_user):
             }
             expenses.append(expense_info)
 
-         return render_template("index.html"), jsonify(expenses)
+         return jsonify(expenses)
       
       except:
          return jsonify({'message': "Some error ocurred"}), 500
@@ -370,5 +370,5 @@ def delete_user(current_user, admin):
          return jsonify("An error occured"), 400
       
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=6000)
    

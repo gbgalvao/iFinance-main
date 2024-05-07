@@ -1,5 +1,4 @@
 # iFinance
-### Video Demo:  <https://youtu.be/9Sbe4ZnVkME>
 #### Description:
 The iFinance app is a solution built exclusevely for you to easely control your expenses and have a visual representation of your finances.
 
