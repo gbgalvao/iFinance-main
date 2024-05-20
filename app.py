@@ -1,16 +1,22 @@
 import jwt
+import logging
+from flask_jwt_extended import JWTManager, jwt_required, create_access_token, get_jwt_identity, get_jwt_header
 
 from datetime import date, datetime, timedelta
-from flask import Flask, render_template, jsonify, request, session
+from flask import Flask, jsonify, request, g
 from flask_session import Session
 from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
 from sqlalchemy import func
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from helpers import admin_required, token_required, brl, find_number, find_special_char
+from helpers import token_required, brl, find_number, find_special_char
 
 # Configure application
 app = Flask(__name__)
+
+# Allow requests from front-end
+CORS(app, resources={r"/*": {"origins": "http://localhost:3001"}})
 
 # Custom filter
 app.jinja_env.filters["brl"] = brl
@@ -49,43 +55,14 @@ class Expenses(db.Model):
 
 with app.app_context():
    db.create_all()
+   
 
-@app.route("/")
-@token_required
-def index(current_user):
-  """"Show table of expenses and add/remove more expenses"""
-  if request.method == "GET":
-      try:
-         Expense_list_db = Expenses.query.filter(Expenses.user_id == current_user).all()
-         expenses = []
-         for expense in Expense_list_db:
-            expense_category_name = Expense_category.query.filter(Expense_category.id == expense.category_id).with_entities(Expense_category.name).first()
-            expense_info = {
-               "name": expense.name,
-               "category": expense_category_name.name,
-               "price": expense.price,
-               "date": expense.date
-            }
-            expenses.append(expense_info)
-
-         return jsonify(expenses)
-      
-      except:
-         return jsonify({'message': "Some error ocurred"}), 500
-
-@app.route("/login", methods=["POST", "GET"])
+@app.route("/login", methods=["POST"])
 def login():
     """Log in User"""
-
-    # Forget any user_id
-    session.clear()
-
-    # If request comes from a get method the login form is displayed
-    if request.method == "GET":
-      return render_template("login.html")
     
     # If request comes from a post method login form will be sent
-    else:
+    if request.method == "POST":
       # Getting login info
       login_info = request.json
 
@@ -93,13 +70,13 @@ def login():
       password = login_info.get('password')
 
       if not username or not password:
-            return jsonify({'message': 'Invalid username or password'}), 403
+            return jsonify({'message': 'Invalid username or password'}), 600
       
-      # Query database for username *TODO*
+      # Query database for username
       user = Users.query.filter(Users.username == username).first()
 
       if user is None or not check_password_hash(user.hash, password):
-            return jsonify({'message': 'Invalid username or password'}), 403
+            return jsonify({'message': 'Invalid username or password'}), 600
 
       # Create a payload for the token
       payload = {
@@ -120,32 +97,29 @@ def login():
 def logout():
     """Log user out"""
 
-    # Forget any user_id
-    session.clear()
-
-    # Redirect user to login form
+    # Return success and a message
     return jsonify({'message': 'Logged out successfully'}), 200
 
 
 @app.route("/register", methods=["POST", "GET"])
 def register():
    """Register User"""
-   
-   # If request comes from a get method the register form is displayed
-   if request.method == "GET":
-    return render_template("register.html")
-   
+
    # If request comes from a post method register form will be sent
-   else:
+   if request.method == "POST":
       register_info = request.json
 
       name = register_info.get('name')
       username = register_info.get('username')
       password = register_info.get('password')
       confirmation = register_info.get('confirmation')
+      username_exists =  db.session.query(Users.query.filter_by(username=username).exists()).scalar()
 
-      if not name or not name.isalpha():
-         return jsonify("Use only letters for your name"), 403
+      if username_exists:
+         return jsonify({"message": "Username already exists"}), 403
+
+      elif not name or not name.isalpha():
+         return jsonify({"message": "Use only letters for your name"}), 403
 
       elif not username:
          return 401
@@ -157,7 +131,8 @@ def register():
          return jsonify({"message": "Password must contain at least 8 characters, numbers and special characters"}), 402
       
       elif confirmation != password:
-         return jsonify({"message": "Password don't match"}), 406     
+         return jsonify({"message": "Password don't match"}), 406
+
       else:
          user = Users(name=name, username=username, hash=generate_password_hash(password), date_joined=date.today())
 
@@ -171,35 +146,50 @@ def register():
 
 @app.route("/add_category", methods=["POST"])
 @token_required
-@admin_required
-def add_category(current_user, admin):
-   category_json  = request.json.get('category').lower()
-   category = Expense_category(name=category_json)
-   categories_query = db.session.query(Expense_category.name).all()
-   categories = [category[0] for category in categories_query]
+def add_category():
+    if not g.get('admin'):
+       return jsonify({'message': 'Access denied'}), 401
 
-   if not category_json:
-      return jsonify("Can't be empty"), 403
-   elif not isinstance(category_json, str):
-    return jsonify("Category should be a string"), 400
-   elif not category_json.isalpha():
-      return jsonify("Only alphabetic characters allowed"), 403
-   elif not (1 <= len(category_json) <= 50):
-      return jsonify("Category length should be between 1 and 50 characters"), 400
-   elif category_json in categories:
-      return jsonify("Category already exists"), 403
-   else:
-      try:
-         db.session.add(category)
-         db.session.commit()
-         return jsonify("Category added"), 200
-      except ValueError:
-         return jsonify("Some error ocurred"), 400
-      
+    data = request.get_json()
+
+    if not data or 'category' not in data:
+        return jsonify("Missing category data"), 400
+
+    category_json = data['category'].strip().lower()
+    
+    if not category_json:
+        return jsonify("Can't be empty"), 403
+    elif not isinstance(category_json, str):
+        return jsonify("Category should be a string"), 400
+    elif not category_json.isalpha():
+        return jsonify("Only alphabetic characters allowed"), 403
+    elif not (1 <= len(category_json) <= 50):
+        return jsonify("Category length should be between 1 and 50 characters"), 400
+
+    existing_category = db.session.query(Expense_category).filter_by(name=category_json).first()
+
+    if existing_category:
+        return jsonify("Category already exists"), 403
+
+    category = Expense_category(name=category_json)
+
+    try:
+        db.session.add(category)
+        db.session.commit()
+        return jsonify("Category added"), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(f"Some error occurred: {str(e)}"), 500
+
+# Admin protected route
 @app.route("/delete_category", methods=["POST"])
 @token_required
-@admin_required
-def delete_category(current_user, admin):
+def delete_category():
+
+   # Checks if user is admin
+   if not g.get('admin'):
+       return jsonify({'message': 'Access denied'}), 401
+
    category  = request.json.get('category').lower()
    categories_query = db.session.query(Expense_category.name).all()
    categories = [category[0] for category in categories_query]
@@ -221,12 +211,11 @@ def delete_category(current_user, admin):
          return jsonify("Category deleted"), 200
       except ValueError:
          return jsonify("Some error ocurred"), 400
-   
 
-   
+
 @app.route("/add_expense", methods=["POST"])
 @token_required
-def add_expense(current_user):
+def add_expense():
    categories = Expense_category.query.all()
 
    expense_data = request.json
@@ -254,8 +243,11 @@ def add_expense(current_user):
    if not category:
       return jsonify("Some error ocurred"), 400
 
+   token = request.headers.get('Authorization')
+   user_data = jwt.decode(token, 'your_secret_key', algorithms=['HS256'])
+
    expense_data_db = Expenses(
-      user_id=current_user,
+      user_id=user_data['user_id'],
       name=expense_data["name"],
       price=price,
       date=expense_date,
@@ -273,70 +265,117 @@ def add_expense(current_user):
 
 @app.route("/get_categories")
 @token_required
-def get_categories(current_user):
-    categories = Expense_category.query.all()  # Fetch categories from your database
-    category_names = [category.name for category in categories]
-
-    return jsonify({'categories': category_names})
+def get_categories():
+   categories = Expense_category.query.all()  # Fetch categories from your database
+   category_names = [category.name for category in categories]
+   
+   return jsonify({'categories': category_names})
 
 
 # Chartview route
-@app.route("/chartview")
+@app.route("/chartview", methods=["GET"])
 @token_required
-def chartview(current_user):
-   years_query = db.session.query(func.extract('year', Expenses.date)).filter(Expenses.user_id == current_user).distinct()
-   years = [result[0] for result in years_query]
+def chartview():
+   token = request.headers.get('Authorization')
+   user_data = jwt.decode(token, 'your_secret_key', algorithms=['HS256'])
+   try:
+      years_query = db.session.query(func.extract('year', Expenses.date)).filter(Expenses.user_id == user_data['user_id']).distinct()
+      years = [result[0] for result in years_query]
+      return jsonify(years)
+   except:
+      return jsonify({"message": "Some error ocurred"}), 400
 
-   return jsonify(years)
 
-
-@app.route("/fetch_data", methods=["POST"])
+@app.route("/fetch_expenses_data", methods=["POST"])
 @token_required
-def fetch_data():
-   return 200
+def fetch_expenses_data():
+   token = request.headers.get('Authorization')
+   user_data = jwt.decode(token, 'your_secret_key', algorithms=['HS256'])
+
+   try:
+      user_id = user_data.get("user_id")
+      if not user_id:
+         raise ValueError("user_id not found in tonken")
+      
+      Expense_data_query = db.session.query(Expenses).filter(Expenses.user_id == user_id).all()
+      
+      expenses = []
+
+      for expense in Expense_data_query:
+         # Converter cada objeto de despesa em um dicionário
+         expense_data = {
+            "name": expense.name,
+            "category": expense.category.name,
+            "price": expense.price,
+            "date": expense.date
+         }
+         expenses.append(expense_data)
+
+      return jsonify(expenses), 200
+   except ValueError as ve:
+      logging.error(f"ValueError: {str(ve)}")
+      return jsonify({"message": str(ve)}), 400
+   except Exception as e:
+      logging.error(f"An error occurred: {str(e)}")
+      return jsonify({"message": "Some error occurred"}), 400
 
 # Route used by chartview
 @app.route("/fetch_data_chart", methods=["POST"])
 @token_required
-def fetch_data_chart(current_user):
-      if request.method == "POST":
-         year = request.json.get("year")  # Access JSON data from the request body
+def fetch_data_chart():
+   year = request.json.get("year")  # Access JSON data from the request body
+   token = request.headers.get('Authorization')
+   user_data = jwt.decode(token, 'your_secret_key', algorithms=['HS256'])
 
-         data_query = (
-            db.session.query(
-               func.extract('year', Expenses.date).label('year'),
-               func.extract('month', Expenses.date).label('month'),
-               func.sum(Expenses.price).label('total_value')
-            )
-            .filter(
-               func.extract('year', Expenses.date) == year,
-               Expenses.user_id == current_user  # Ensure user_id condition placement
-            )
-            .group_by('year', 'month')
-            .order_by('year', 'month')
-         )
+   try:
+      user_id = user_data.get("user_id")
+      if not user_id:
+         raise ValueError("user_id not found in tonken")
+   except ValueError as ve:
+      logging.error(f"ValueError: {str(ve)}")
+      return jsonify({"message": str(ve)}), 400
 
-         data_query_sum = data_query.all()
 
-         data = []
+   data_query = (
+      db.session.query(
+         func.extract('year', Expenses.date).label('year'),
+         func.extract('month', Expenses.date).label('month'),
+         func.sum(Expenses.price).label('total_value')
+      )
+      .filter(
+         func.extract('year', Expenses.date) == year,
+         Expenses.user_id == user_id # Ensure user_id condition placement
+      )
+      .group_by('year', 'month')
+      .order_by('year', 'month')
+   )
 
-         for result in data_query_sum:
-            data_sum = {
-               'year': result.year,
-               'month': result.month,
-               'total_value': f'{result.total_value:.2f}'
-            }
-            data.append(data_sum)
-         
-         if not data:
-            return jsonify(f"{'No data available for the year: ', year}"), 404
-         else:
-            return jsonify(data)
-      
-@app.route("/manage_users")
+   data_query_sum = data_query.all()
+
+   data = []
+
+   for result in data_query_sum:
+      data_sum = {
+         'year': result.year,
+         'month': result.month,
+         'total_value': f'{result.total_value:.2f}'
+      }
+      data.append(data_sum)
+
+   if not data:
+      return jsonify(f"{'No data available for the year: ', year}"), 404
+   else:
+      return jsonify(data)
+
+# Admin protected route
+@app.route("/get_users", methods=["GET"])
 @token_required
-@admin_required
-def manage_users(current_user, admin):
+def get_users():
+
+   # Checking if user is admin
+   if not g.get('admin'):
+       return jsonify({'message': 'Access denied'}), 401
+   
    users_query = db.session.query(Users.name , Users.username, Users.date_joined).all()
 
    users = []
@@ -355,8 +394,12 @@ def manage_users(current_user, admin):
 
 @app.route("/delete_user", methods=["POST"])
 @token_required
-@admin_required
-def delete_user(current_user, admin):
+def delete_user():
+
+   # Checking if user is admin
+   if not g.get('admin'):
+       return jsonify({'message': 'Access denied'}), 401
+
    username_to_delete = request.json.get("username_to_delete")
 
    username_to_delete_query = db.session.query(Users).filter(Users.username == username_to_delete).first()
@@ -368,7 +411,9 @@ def delete_user(current_user, admin):
          return jsonify("User deleted succesfully")
       except ValueError:
          return jsonify("An error occured"), 400
+   else:
+      return jsonify("No user found"), 302
       
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=6000)
+    app.run(host='0.0.0.0', port=8000)
    
