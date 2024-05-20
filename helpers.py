@@ -30,10 +30,6 @@ def token_required(f):
 
     return decorated
 
-def brl(value):
-    """Format value as BRL."""
-    return f"R${value:,.2f}"
-
 def find_special_char(input):
     # Define a regular expression pattern to match special characters
     pattern = r'[^\w]'  # Matches any character that is not a word character or whitespace

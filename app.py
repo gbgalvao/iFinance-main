@@ -1,6 +1,5 @@
 import jwt
 import logging
-from flask_jwt_extended import JWTManager, jwt_required, create_access_token, get_jwt_identity, get_jwt_header
 
 from datetime import date, datetime, timedelta
 from flask import Flask, jsonify, request, g
@@ -101,47 +100,45 @@ def logout():
     return jsonify({'message': 'Logged out successfully'}), 200
 
 
-@app.route("/register", methods=["POST", "GET"])
+@app.route("/register", methods=["POST"])
 def register():
    """Register User"""
 
-   # If request comes from a post method register form will be sent
-   if request.method == "POST":
-      register_info = request.json
+   register_info = request.json
 
-      name = register_info.get('name')
-      username = register_info.get('username')
-      password = register_info.get('password')
-      confirmation = register_info.get('confirmation')
-      username_exists =  db.session.query(Users.query.filter_by(username=username).exists()).scalar()
+   name = register_info.get('name')
+   username = register_info.get('username')
+   password = register_info.get('password')
+   confirmation = register_info.get('confirmation')
+   username_exists =  db.session.query(Users.query.filter_by(username=username).exists()).scalar()
 
-      if username_exists:
-         return jsonify({"message": "Username already exists"}), 403
+   if username_exists:
+      return jsonify({"message": "Username already exists"}), 403
 
-      elif not name or not name.isalpha():
-         return jsonify({"message": "Use only letters for your name"}), 403
+   elif not name or not name.isalpha():
+      return jsonify({"message": "Use only letters for your name"}), 403
 
-      elif not username:
-         return 401
-      
-      elif not password:
-         return 402
-      
-      elif len(password) < 8 or find_special_char(password) == False or find_number(password) == False:
-         return jsonify({"message": "Password must contain at least 8 characters, numbers and special characters"}), 402
-      
-      elif confirmation != password:
-         return jsonify({"message": "Password don't match"}), 406
+   elif not username:
+      return 401
+   
+   elif not password:
+      return 402
+   
+   elif len(password) < 8 or find_special_char(password) == False or find_number(password) == False:
+      return jsonify({"message": "Password must contain at least 8 characters, numbers and special characters"}), 402
+   
+   elif confirmation != password:
+      return jsonify({"message": "Password don't match"}), 406
 
-      else:
-         user = Users(name=name, username=username, hash=generate_password_hash(password), date_joined=date.today())
+   else:
+      user = Users(name=name, username=username, hash=generate_password_hash(password), date_joined=date.today())
 
-         try:
-            db.session.add(user)
-            db.session.commit()
-            return jsonify("Success"), 200
-         except ValueError:
-            return jsonify("Some error ocurred"), 400
+      try:
+         db.session.add(user)
+         db.session.commit()
+         return jsonify("Success"), 200
+      except ValueError:
+         return jsonify("Some error ocurred"), 400
 
 
 @app.route("/add_category", methods=["POST"])
