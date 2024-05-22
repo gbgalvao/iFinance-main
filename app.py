@@ -9,16 +9,13 @@ from flask_cors import CORS
 from sqlalchemy import func
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from helpers import token_required, brl, find_number, find_special_char
+from helpers import token_required, check_name_field, validate_password, validate_username, validate_name_50char
 
 # Configure application
 app = Flask(__name__)
 
 # Allow requests from front-end
 CORS(app, resources={r"/*": {"origins": "http://localhost:3001"}})
-
-# Custom filter
-app.jinja_env.filters["brl"] = brl
 
 # Configure session to use filesystem (instead of signed cookies)
 app.config["SESSION_PERMANENT"] = False
@@ -115,16 +112,13 @@ def register():
    if username_exists:
       return jsonify({"message": "Username already exists"}), 403
 
-   elif not name or not name.isalpha():
+   elif not name or not check_name_field(name):
       return jsonify({"message": "Use only letters for your name"}), 403
 
-   elif not username:
-      return 401
-   
-   elif not password:
-      return 402
-   
-   elif len(password) < 8 or find_special_char(password) == False or find_number(password) == False:
+   elif not username or not validate_username(username):
+      return jsonify({"message": "Username must only letters and numbers and smaller than 20 characters"}), 403
+
+   elif not password or not validate_password(password):
       return jsonify({"message": "Password must contain at least 8 characters, numbers and special characters"}), 402
    
    elif confirmation != password:
@@ -144,39 +138,33 @@ def register():
 @app.route("/add_category", methods=["POST"])
 @token_required
 def add_category():
-    if not g.get('admin'):
-       return jsonify({'message': 'Access denied'}), 401
+   if not g.get('admin'):
+      return jsonify({'message': 'Access denied'}), 401
 
-    data = request.get_json()
+   data = request.get_json()
 
-    if not data or 'category' not in data:
-        return jsonify("Missing category data"), 400
+   if not data or 'category' not in data:
+      return jsonify("Missing category data"), 400
 
-    category_json = data['category'].strip().lower()
-    
-    if not category_json:
-        return jsonify("Can't be empty"), 403
-    elif not isinstance(category_json, str):
-        return jsonify("Category should be a string"), 400
-    elif not category_json.isalpha():
-        return jsonify("Only alphabetic characters allowed"), 403
-    elif not (1 <= len(category_json) <= 50):
-        return jsonify("Category length should be between 1 and 50 characters"), 400
+   category_json = data['category'].strip().lower()
 
-    existing_category = db.session.query(Expense_category).filter_by(name=category_json).first()
+   if not validate_name_50char(category_json):
+      return jsonify("Only alphabetical and less than 50 characters names is allowed"), 500
 
-    if existing_category:
-        return jsonify("Category already exists"), 403
+   existing_category = db.session.query(Expense_category).filter_by(name=category_json).first()
 
-    category = Expense_category(name=category_json)
+   if existing_category:
+      return jsonify("Category already exists"), 403
 
-    try:
-        db.session.add(category)
-        db.session.commit()
-        return jsonify("Category added"), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify(f"Some error occurred: {str(e)}"), 500
+   category = Expense_category(name=category_json)
+
+   try:
+      db.session.add(category)
+      db.session.commit()
+      return jsonify("Category added"), 200
+   except Exception as e:
+      db.session.rollback()
+      return jsonify(f"Some error occurred: {str(e)}"), 500
 
 # Admin protected route
 @app.route("/delete_category", methods=["POST"])
@@ -193,12 +181,6 @@ def delete_category():
 
    if not category:
       return jsonify("Can't be empty"), 403
-   elif not isinstance(category, str):
-    return jsonify("Category should be a string"), 400
-   elif not category.isalpha():
-      return jsonify("Only alphabetic characters allowed"), 403
-   elif not (1 <= len(category) <= 50):
-      return jsonify("Category length should be between 1 and 50 characters"), 400
    elif category not in categories:
       return jsonify("Category not found"), 404
    else:
@@ -218,23 +200,21 @@ def add_expense():
    expense_data = request.json
 
    if expense_data['category'] not in [category.name for category in categories]:
-        return jsonify("Category not available"), 404
+      return jsonify("Category not available"), 404
    if not expense_data["name"] or not expense_data["category"]:
       return jsonify("Name or category fields can't be null"), 403
-    
-   try:
-      price = float(expense_data["price"])
-      if price <= 0:
-         return jsonify("Price can't be 0 or lower"), 403
-   except ValueError:
-      return jsonify("Some error ocurred"), 400
+   
+   if not validate_name_50char(expense_data["name"]):
+      return jsonify({"message": "Expense name can't contain numbers or greater than 50 characters"}), 400
 
-   try:
-      expense_date = datetime.strptime(expense_data["date"], "%Y-%m-%d").date()
-      if expense_date > date.today():
-         return jsonify("Date can't be in the future"), 403
-   except ValueError:
-      return jsonify("Some error ocurred"), 400
+   price = float(expense_data["price"])
+   if price <= 0:
+      return jsonify("Price can't be 0 or lower"), 403
+   
+   expense_date = datetime.strptime(expense_data["date"], "%Y-%m-%d").date()
+
+   if expense_date > date.today():
+      return jsonify("Date can't be in the future"), 403
 
    category = Expense_category.query.filter_by(name=expense_data["category"]).first()
    if not category:

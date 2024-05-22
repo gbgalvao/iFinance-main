@@ -4,6 +4,7 @@ import re
 from flask import jsonify, g, request
 from functools import wraps
 
+
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -30,19 +31,35 @@ def token_required(f):
 
     return decorated
 
-def find_special_char(input):
-    # Define a regular expression pattern to match special characters
-    pattern = r'[^\w]'  # Matches any character that is not a word character or whitespace
 
-    # Search for the pattern in the input string
-    match = re.search(pattern, input)
+def check_name_field(input):
+    # Definindo o padrão para o campo nome
+    pattern = re.compile(r'^[A-Za-z\s]+$')
 
-    # If a match is found, return True (contains special character), otherwise return False
+    match = pattern.match(input)
+
     return bool(match)
 
-def find_number(input):
-    pattern = r'\d'
 
-    match = re.search(pattern, input)
+def validate_password(input):
+
+    pattern = re.compile(r'^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])[A-Za-z\d!@#$%^&*(),.?":{}|<>]{8,}$')
+
+    match = pattern.match(input)
+
+    return bool(match)
+
+def validate_username(input):
+    pattern = re.compile(r'^[A-Za-z\d]{1,20}$')
+
+    match = pattern.match(input)
+
+    return bool(match)
+
+def validate_name_50char(input):
+    # Definindo o padrão para o campo nome
+    pattern = re.compile(r'^[A-Za-z\s]{1,50}$')
+
+    match = pattern.match(input)
 
     return bool(match)
