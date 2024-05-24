@@ -16,20 +16,18 @@ def token_required(f):
         try:
             # Decode the token
             data = jwt.decode(token, 'your_secret_key', algorithms=['HS256'])
-            if 'admin' in data:
-                g.admin = data["admin"]
-                if not g.admin:
-                    return jsonify({'message': 'Access denied'}), 401
-            else:
-                return jsonify({'message': 'Invalid token'}), 401
+            g.admin = data.get("admin", 0)
+            
+            # Admin check can be done within the protected routes
         except jwt.ExpiredSignatureError:
             return jsonify({'message': 'Token has expired'}), 401
         except jwt.InvalidTokenError:
             return jsonify({'message': 'Invalid token'}), 401
 
         return f(*args, **kwargs)
-
+    
     return decorated
+
 
 
 def check_name_field(input):
