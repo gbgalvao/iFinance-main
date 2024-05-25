@@ -166,30 +166,30 @@ def add_category():
       db.session.rollback()
       return jsonify(f"Some error occurred: {str(e)}"), 500
 
-# Admin protected route
-@app.route("/delete_category", methods=["POST"])
-@token_required
-def delete_category():
+# # Admin protected route
+# @app.route("/delete_category", methods=["POST"])
+# @token_required
+# def delete_category():
 
-   # Checks if user is admin
-   if not g.get('admin'):
-       return jsonify({'message': 'Access denied'}), 401
+#    # Checks if user is admin
+#    if not g.get('admin'):
+#        return jsonify({'message': 'Access denied'}), 401
 
-   category  = request.json.get('category').lower()
-   categories_query = db.session.query(Expense_category.name).all()
-   categories = [category[0] for category in categories_query]
+#    category  = request.json.get('category').lower()
+#    categories_query = db.session.query(Expense_category.name).all()
+#    categories = [category[0] for category in categories_query]
 
-   if not category:
-      return jsonify("Can't be empty"), 403
-   elif category not in categories:
-      return jsonify("Category not found"), 404
-   else:
-      try:
-         db.session.query(Expense_category).filter(Expense_category.name == category).delete()
-         db.session.commit()   
-         return jsonify("Category deleted"), 200
-      except ValueError:
-         return jsonify("Some error ocurred"), 400
+#    if not category:
+#       return jsonify("Can't be empty"), 403
+#    elif category not in categories:
+#       return jsonify("Category not found"), 404
+#    else:
+#       try:
+#          db.session.query(Expense_category).filter(Expense_category.name == category).delete()
+#          db.session.commit()   
+#          return jsonify("Category deleted"), 200
+#       except ValueError:
+#          return jsonify("Some error ocurred"), 400
 
 
 @app.route("/add_expense", methods=["POST"])

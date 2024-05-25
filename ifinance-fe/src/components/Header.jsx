@@ -45,7 +45,6 @@ const Header = () => {
             {admin && (
                 <NavDropdown title="Admin tools" id="basic-nav-dropdown">
                   <NavDropdown.Item href="/AddCategory">Add Category</NavDropdown.Item>
-                  <NavDropdown.Item href="/Deletecategory">Delete Category</NavDropdown.Item>
                   <NavDropdown.Item href="/Deleteuser">Delete User</NavDropdown.Item>
                 </NavDropdown>
             )}

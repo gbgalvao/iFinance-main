@@ -9,8 +9,7 @@ import Home from './routes/home';
 import Login from './routes/login';
 import Register from './routes/Register'
 import Logout from './routes/Logout'
-import Addcategory from './routes/Addcategory' 
-import Deletecategory from './routes/Deletecategory'
+import Addcategory from './routes/Addcategory'
 import ErrorPage from './routes/ErrorPage'
 
 const router = createBrowserRouter([
@@ -38,10 +37,6 @@ const router = createBrowserRouter([
       {
         path: "Addcategory",
         element: <Addcategory />,
-      },
-      {
-        path: "Deletecategory",
-        element: <Deletecategory />,
       }
     ]
   },
