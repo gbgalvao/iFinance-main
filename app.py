@@ -7,6 +7,7 @@ from flask_session import Session
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from helpers import token_required, check_name_field, validate_password, validate_username, validate_name_50char
@@ -25,6 +26,9 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///finance.sqlite3"
 app.config["SQLALCHEMY_TRACK_MODIFICATION"] = False
 Session(app)
 
+# Defining consts
+ACCESS_DENIED = {"message": "Access Denied"} 
+
 db = SQLAlchemy(app)
 
 class Users(db.Model):
@@ -36,7 +40,7 @@ class Users(db.Model):
    date_joined = db.Column(db.Date)
    expenses = db.relationship('Expenses', backref='user')
    
-class Expense_category(db.Model):
+class ExpenseCategory(db.Model):
    id = db.Column(db.Integer, primary_key=True)
    name = db.Column(db.String(50))
    expenses = db.relationship('Expenses', backref='category')
@@ -131,15 +135,16 @@ def register():
          db.session.add(user)
          db.session.commit()
          return jsonify("Success"), 200
-      except ValueError:
-         return jsonify("Some error ocurred"), 400
+      except SQLAlchemyError as e:
+        # Log the error or handle it as needed
+        return jsonify({"message": f"Database error: {str(e)}"}), 400
 
 
 @app.route("/add_category", methods=["POST"])
 @token_required
 def add_category():
    if not g.get('admin'):
-      return jsonify({'message': 'Access denied'}), 401
+      return jsonify(ACCESS_DENIED), 401
 
    data = request.get_json()
 
@@ -151,12 +156,12 @@ def add_category():
    if not validate_name_50char(category_json):
       return jsonify("Only alphabetical and less than 50 characters names is allowed"), 500
 
-   existing_category = db.session.query(Expense_category).filter_by(name=category_json).first()
+   existing_category = db.session.query(ExpenseCategory).filter_by(name=category_json).first()
 
    if existing_category:
       return jsonify("Category already exists"), 403
 
-   category = Expense_category(name=category_json)
+   category = ExpenseCategory(name=category_json)
 
    try:
       db.session.add(category)
@@ -166,36 +171,11 @@ def add_category():
       db.session.rollback()
       return jsonify(f"Some error occurred: {str(e)}"), 500
 
-# # Admin protected route
-# @app.route("/delete_category", methods=["POST"])
-# @token_required
-# def delete_category():
-
-#    # Checks if user is admin
-#    if not g.get('admin'):
-#        return jsonify({'message': 'Access denied'}), 401
-
-#    category  = request.json.get('category').lower()
-#    categories_query = db.session.query(Expense_category.name).all()
-#    categories = [category[0] for category in categories_query]
-
-#    if not category:
-#       return jsonify("Can't be empty"), 403
-#    elif category not in categories:
-#       return jsonify("Category not found"), 404
-#    else:
-#       try:
-#          db.session.query(Expense_category).filter(Expense_category.name == category).delete()
-#          db.session.commit()   
-#          return jsonify("Category deleted"), 200
-#       except ValueError:
-#          return jsonify("Some error ocurred"), 400
-
 
 @app.route("/add_expense", methods=["POST"])
 @token_required
 def add_expense():
-   categories = Expense_category.query.all()
+   categories = ExpenseCategory.query.all()
 
    expense_data = request.json
 
@@ -216,9 +196,9 @@ def add_expense():
    if expense_date > date.today():
       return jsonify("Date can't be in the future"), 403
 
-   category = Expense_category.query.filter_by(name=expense_data["category"]).first()
+   category = ExpenseCategory.query.filter_by(name=expense_data["category"]).first()
    if not category:
-      return jsonify("Some error ocurred"), 400
+      return jsonify({"message": "Categort can't be empty"}), 400
 
    token = request.headers.get('Authorization')
    user_data = jwt.decode(token, 'your_secret_key', algorithms=['HS256'])
@@ -243,7 +223,7 @@ def add_expense():
 @app.route("/get_categories")
 @token_required
 def get_categories():
-   categories = Expense_category.query.all()  # Fetch categories from your database
+   categories = ExpenseCategory.query.all()  # Fetch categories from your database
    category_names = [category.name for category in categories]
    
    return jsonify({'categories': category_names})
@@ -259,8 +239,10 @@ def chartview():
       years_query = db.session.query(func.extract('year', Expenses.date)).filter(Expenses.user_id == user_data['user_id']).distinct()
       years = [result[0] for result in years_query]
       return jsonify(years)
-   except:
-      return jsonify({"message": "Some error ocurred"}), 400
+   except SQLAlchemyError as e:
+        # Log the error or handle it as needed
+        print(f"Database error: {e}")
+        return jsonify({"message": "Some error occurred"}), 400
 
 
 @app.route("/fetch_expenses_data", methods=["POST"])
@@ -274,11 +256,11 @@ def fetch_expenses_data():
       if not user_id:
          raise ValueError("user_id not found in tonken")
       
-      Expense_data_query = db.session.query(Expenses).filter(Expenses.user_id == user_id).all()
+      expense_data_query = db.session.query(Expenses).filter(Expenses.user_id == user_id).all()
       
       expenses = []
 
-      for expense in Expense_data_query:
+      for expense in expense_data_query:
          # Converter cada objeto de despesa em um dicionário
          expense_data = {
             "name": expense.name,
@@ -351,7 +333,7 @@ def get_users():
 
    # Checking if user is admin
    if not g.get('admin'):
-       return jsonify({'message': 'Access denied'}), 401
+       return jsonify(ACCESS_DENIED), 401
    
    users_query = db.session.query(Users.name , Users.username, Users.date_joined).all()
 
@@ -366,8 +348,8 @@ def get_users():
 
    try:
       return jsonify(users), 200
-   except ValueError:
-      return jsonify("Some error ocurred"), 400
+   except ValueError as e:
+      return jsonify({"message" : f"Some error occurred: {str(e)}"}), 400
 
 @app.route("/delete_user", methods=["POST"])
 @token_required
