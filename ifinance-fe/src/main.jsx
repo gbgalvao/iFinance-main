@@ -11,6 +11,7 @@ import Register from './routes/Register'
 import Logout from './routes/Logout'
 import Addcategory from './routes/Addcategory'
 import ErrorPage from './routes/ErrorPage'
+import Charts from './routes/Charts'
 
 const router = createBrowserRouter([
   {
@@ -37,6 +38,10 @@ const router = createBrowserRouter([
       {
         path: "Addcategory",
         element: <Addcategory />,
+      },
+      {
+        path: "Charts",
+        element: <Charts/>,
       }
     ]
   },
