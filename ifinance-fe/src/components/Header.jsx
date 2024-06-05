@@ -40,7 +40,7 @@ const Header = () => {
         <Navbar.Collapse id="basic-navbar-nav">
           <Nav>
             {token && (
-              <Nav.Link href="/chartview">Chartview</Nav.Link>
+              <Nav.Link href="/Charts">Chartview</Nav.Link>
             )}
             {admin && (
                 <NavDropdown title="Admin tools" id="basic-nav-dropdown">
@@ -56,9 +56,7 @@ const Header = () => {
                 <Nav.Link href="/register">Register</Nav.Link>
               </>
             ) : (
-              <>
-                <Nav.Link href="/logout">Logout</Nav.Link>
-              </>
+              <Nav.Link href="/logout">Logout</Nav.Link> 
             )}
           </Nav>
         </Navbar.Collapse>

@@ -40,7 +40,7 @@ def check_name_field(input):
 
 
 def validate_password(input):
-
+    # Validação da senha
     pattern = re.compile(r'^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])[A-Za-z\d!@#$%^&*(),.?":{}|<>]{8,}$')
 
     match = pattern.match(input)
@@ -48,6 +48,7 @@ def validate_password(input):
     return bool(match)
 
 def validate_username(input):
+    # Validação nome de usuário
     pattern = re.compile(r'^[A-Za-z\d]{1,20}$')
 
     match = pattern.match(input)

@@ -84,3 +84,16 @@ th {
 #delete_category_option {
     text-transform: capitalize;
 }
+
+.chart-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 60vh; /* Adjust height as needed */
+  }
+  
+  .chart-container h1,
+  .chart-container select {
+    margin-bottom: 20px; /* Adjust spacing as needed */
+  }

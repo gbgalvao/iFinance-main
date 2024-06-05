@@ -33,7 +33,7 @@ const addCategory = () => {
   }, [token]);
 
   useEffect(() => {
-    if (decodedToken.admin == false || !token) {
+    if (!decodedToken.admin || !token) {
       navigate('/login');
     }
   }, [admin, token, navigate]);
